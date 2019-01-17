@@ -1,8 +1,8 @@
-/* 
- * File:   blinky.c
- * Author: john
- *
- * Created on 10 January 2019, 22:45
+/* blinky --- blink five LEDs on PIC32 dev board                       */
+/* Copyright (c) 2019 John Honniball. All rights reserved              */
+
+/*
+ * Created: 2019-01-10 22:45
  */
 
 #include <stdio.h>
@@ -57,9 +57,9 @@
 
 volatile uint32_t MilliSeconds = 0;
 volatile uint32_t SPIword = 0;
-volatile uint32_t PhaseAcc = 0;
-volatile uint32_t PhaseInc = 1024 * 1024;
-uint16_t Sinbuf[4096];
+
+
+/* dally --- CPU busy-loop for crude time delay */
 
 static void dally(const int loops)
 {
@@ -69,6 +69,9 @@ static void dally(const int loops)
             ;
 }
 
+
+/* delayms --- busy-wait delay for given number of milliseconds */
+
 static void delayms(const uint32_t interval)
 {
     const uint32_t now = MilliSeconds;
@@ -77,25 +80,24 @@ static void delayms(const uint32_t interval)
         ;
 }
 
+
+/* millis --- Arduino-like function to return milliseconds since start-up */
+
 static uint32_t millis(void)
 {
-    /* Arduino-like function to return milliseconds since start-up */
     return (MilliSeconds);
 }
+
 
 void __ISR(_TIMER_4_VECTOR, ipl1) Timer4Handler(void) 
 {    
     static int flag = 0;
-    int i;
     
     LATAINV = _LATA_LATA4_MASK; // Toggle P7 pin 6 (22050Hz)
     
     LATDCLR = _LATD_LATD9_MASK;   // Assert SS
     
-    i = PhaseAcc >> 20;
-    PhaseAcc += PhaseInc;
-    
-    SPI2BUF = (0 << 15) | (1 << 13) | (1 << 12) | Sinbuf[i];
+    SPI2BUF = SPIword;
     
     if (flag > 31)
     {
@@ -239,6 +241,9 @@ static void ADC_begin(void)
     AD1CON1SET = _AD1CON1_ON_MASK;
 }
 
+
+/* analogRead --- Arduino-like function to read an analog input pin */
+
 uint16_t analogRead(const int chan)
 {    
     AD1CHSbits.CH0SA = chan;
@@ -285,6 +290,9 @@ static void SPI2_begin(void)
     SPI2CONbits.ON = 1;
 }
 
+
+/* toneT2 --- generate a tone of the given frequency via Timer 2 and OC2 */
+
 void toneT2(const int freq)
 {
     if (freq == 0)
@@ -303,9 +311,7 @@ void main(void)
 {
     char buf[32];
     int i;
-    double delta;
     uint16_t ana;
-    uint16_t dacx, dacy;
     
     /* Configure tri-state registers*/
     TRISEbits.TRISE6 = 0;   // LED1 as output
@@ -314,7 +320,7 @@ void main(void)
     TRISAbits.TRISA7 = 0;   // LED5 as output
     TRISAbits.TRISA6 = 0;   // LED5 as output
     
-    TRISAbits.TRISA4 = 0;   // P7 pin 6 as output (timer toggle))
+    TRISAbits.TRISA4 = 0;   // P7 pin 6 as output (timer toggle)
     
     UART1_begin(19200);
     UART2_begin(9600);
@@ -388,13 +394,6 @@ void main(void)
     IFS0CLR = _IFS0_T4IF_MASK;  // Clear Timer 4 interrupt flag
     IEC0SET = _IEC0_T4IE_MASK;  // Enable Timer 4 interrupt
     
-    delta = (2.0 * M_PI) / 4096.0;
-    
-    for (i = 0; i < 4096; i++)
-    {
-        Sinbuf[i] = (sin(delta * (double)i) * 2047.0) + 2048.0;
-    }
-    
     __asm__("EI");              // Global interrupt enable
     
     while(1)
@@ -407,8 +406,7 @@ void main(void)
         LED4 = 1;
         LED5 = 1;
         
-        dacx = 0;
-        SPIword = (0 << 15) | (1 << 13) | (1 << 12) | dacx;
+        SPIword = 0x0000;
         OC1RS = 0;
         toneT2(440);
         
@@ -429,8 +427,7 @@ void main(void)
         LED1 = 1;
         LED2 = 0;
         
-        dacx = 1024;
-        SPIword = (0 << 15) | (1 << 13) | (1 << 12) | dacx;
+        SPIword = 0xAA55;
         OC1RS = 128;
         toneT2(0);
         
@@ -441,8 +438,7 @@ void main(void)
         LED2 = 1;
         LED3 = 0;
         
-        dacx = 2048;
-        SPIword = (0 << 15) | (1 << 13) | (1 << 12) | dacx;
+        SPIword = 0x55AA;
         OC1RS = 256;
         toneT2(880);
         
@@ -453,8 +449,7 @@ void main(void)
         LED3 = 1;
         LED4 = 0;
         
-        dacx = 3072;
-        SPIword = (0 << 15) | (1 << 13) | (1 << 12) | dacx;
+        SPIword = 0xFF00;
         OC1RS = 512;
         toneT2(0);
         
@@ -465,8 +460,7 @@ void main(void)
         LED4 = 1;
         LED5 = 0;
         
-        dacx = 4095;
-        SPIword = (0 << 15) | (1 << 13) | (1 << 12) | dacx;
+        SPIword = 0xFF00;
         OC1RS = 1023;
         toneT2(440 * 8);
         
