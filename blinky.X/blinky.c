@@ -259,7 +259,7 @@ uint16_t analogRead(const int chan)
     return (ADC1BUF0);
 }
 
-static void SPI2_begin(void)
+static void SPI2_begin(const int baud)
 {
         
     /* Configure SPI1 */
@@ -272,7 +272,7 @@ static void SPI2_begin(void)
     SDI2Rbits.SDI2R = 0;   // SDI1 on RPD3, pin 
     RPC13Rbits.RPC13R = 6; // SDO2 on RPC13, pin 73, P7 pin 16
     
-    SPI2BRG = 9;            // 2MHz
+    SPI2BRG = (20000000 / baud) - 1;
     SPI2CONbits.MSTEN = 1;  // Master mode
     SPI2CONbits.MODE16 = 1; // 16-bit mode
     SPI2CONbits.MODE32 = 0;
@@ -280,7 +280,7 @@ static void SPI2_begin(void)
     SPI2CONbits.STXISEL = 0; // Interrupt on Tx complete
     SPI2CONbits.SRXISEL = 3; // Interrupt on Rx full
     
-    TRISDbits.TRISD9 = 0;   // P7 pin 12 as output for SS
+    TRISDbits.TRISD9 = 0;   // RD9 P7 pin 12 as output for SS
     
     IPC8bits.SPI2IP = 3;          // SPI2 interrupt priority 3
     IPC8bits.SPI2IS = 1;          // SPI2 interrupt sub-priority 1
@@ -330,7 +330,7 @@ void main(void)
 
     ADC_begin();
     
-    SPI2_begin();
+    SPI2_begin(20000000);
     
     RPD8Rbits.RPD8R = 12; // OC1 on P7 pin 10 (LED PWM)
     RPD0Rbits.RPD0R = 11; // OC2 on P7 pin 14 (tone)
