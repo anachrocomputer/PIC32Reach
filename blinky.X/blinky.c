@@ -99,6 +99,10 @@ void __ISR(_TIMER_4_VECTOR, ipl1) Timer4Handler(void)
     
     SPI2BUF = SPIword;
     
+    LATACLR = _LATA_LATA0_MASK;   // Assert SS for SPI3
+    
+    SPI3BUF = SPIword;
+    
     if (flag > 31)
     {
         PR4 = 907;
@@ -112,6 +116,10 @@ void __ISR(_TIMER_4_VECTOR, ipl1) Timer4Handler(void)
     
     IFS1CLR = _IFS1_SPI2RXIF_MASK;  // Clear SPI2 interrupt flag
     IEC1SET = _IEC1_SPI2RXIE_MASK;  // Enable SPI2 interrupt
+    
+    IFS2CLR = _IFS2_SPI3RXIF_MASK;  // Clear SPI3 interrupt flag
+    IEC2SET = _IEC2_SPI3RXIE_MASK;  // Enable SPI3 interrupt
+    
     IFS0CLR = _IFS0_T4IF_MASK;  // Clear Timer 4 interrupt flag
 }
 
@@ -133,6 +141,17 @@ void __ISR(_SPI_2_VECTOR, ipl3) SPI2Handler(void)
     
     IFS1CLR = _IFS1_SPI2RXIF_MASK;  // Clear SPI2 interrupt flag
     IEC1CLR = _IEC1_SPI2RXIE_MASK;  // Disable SPI2 interrupt
+}
+
+void __ISR(_SPI_3_VECTOR, ipl4) SPI3Handler(void) 
+{
+    volatile uint32_t junk;
+    
+    junk = SPI3BUF;
+    LATASET = _LATA_LATA0_MASK;
+    
+    IFS2CLR = _IFS2_SPI3RXIF_MASK;  // Clear SPI3 interrupt flag
+    IEC2CLR = _IEC2_SPI3RXIE_MASK;  // Disable SPI3 interrupt
 }
 
 static void UART1_begin(const int baud)
@@ -290,6 +309,31 @@ static void SPI2_begin(const int baud)
     SPI2CONbits.ON = 1;
 }
 
+static void SPI3_begin(const int baud)
+{    
+    /* Configure SPI3 */
+    // SCK3 on pin 39, RF13, P1 pin 15
+    SDI3Rbits.SDI3R = 0;   // SDI3 on RPD2, pin 77
+    RPG8Rbits.RPG8R = 14;  // SDO3 on RPG8, pin 12, P1 pin 28
+    
+    SPI3BRG = (20000000 / baud) - 1;
+    SPI3CONbits.MSTEN = 1;  // Master mode
+    SPI3CONbits.MODE16 = 1; // 16-bit mode
+    SPI3CONbits.MODE32 = 0;
+    SPI3CONbits.CKE = 1;
+    SPI3CONbits.STXISEL = 0; // Interrupt on Tx complete
+    SPI3CONbits.SRXISEL = 3; // Interrupt on Rx full
+    
+    TRISAbits.TRISA0 = 0;   // RA0 pin 17, P1 pin 24 as output for SS
+    LATASET = _LATA_LATA0_MASK;   // De-assert SS for SPI3
+    
+    IPC12bits.SPI3IP = 4;          // SPI3 interrupt priority 4
+    IPC12bits.SPI3IS = 1;          // SPI3 interrupt sub-priority 1
+    IFS2CLR = _IFS2_SPI3TXIF_MASK;  // Clear SPI3 Tx interrupt flag
+    IFS2CLR = _IFS2_SPI3RXIF_MASK;  // Clear SPI3 Rx interrupt flag
+    
+    SPI3CONbits.ON = 1;
+}
 
 /* toneT2 --- generate a tone of the given frequency via Timer 2 and OC2 */
 
@@ -331,6 +375,7 @@ void main(void)
     ADC_begin();
     
     SPI2_begin(2000000);
+    SPI3_begin(1000000);
     
     RPD8Rbits.RPD8R = 12; // OC1 on P7 pin 10 (LED PWM)
     RPD0Rbits.RPD0R = 11; // OC2 on P7 pin 14 (tone)
