@@ -95,7 +95,7 @@ void __ISR(_TIMER_4_VECTOR, ipl1) Timer4Handler(void)
     
     LATAINV = _LATA_LATA4_MASK; // Toggle P7 pin 6 (22050Hz)
     
-    LATDCLR = _LATD_LATD9_MASK;   // Assert SS
+    LATDCLR = _LATD_LATD9_MASK;   // Assert SS for SPI2
     
     SPI2BUF = SPIword;
     
@@ -261,7 +261,6 @@ uint16_t analogRead(const int chan)
 
 static void SPI2_begin(const int baud)
 {
-        
     /* Configure SPI1 */
     // SCK1 on pin 70 - can't use on this PCB
     //SDI1Rbits.SDI1R = 0;   // SDI1 on RPD3
@@ -269,7 +268,7 @@ static void SPI2_begin(const int baud)
     
     /* Configure SPI2 */
     // SCK2 on pin 10, RG6, P1 pin 32
-    SDI2Rbits.SDI2R = 0;   // SDI1 on RPD3, pin 
+    SDI2Rbits.SDI2R = 0;   // SDI2 on RPD3, pin 78
     RPC13Rbits.RPC13R = 6; // SDO2 on RPC13, pin 73, P7 pin 16
     
     SPI2BRG = (20000000 / baud) - 1;
@@ -280,7 +279,8 @@ static void SPI2_begin(const int baud)
     SPI2CONbits.STXISEL = 0; // Interrupt on Tx complete
     SPI2CONbits.SRXISEL = 3; // Interrupt on Rx full
     
-    TRISDbits.TRISD9 = 0;   // RD9 P7 pin 12 as output for SS
+    TRISDbits.TRISD9 = 0;   // RD9 pin 69, P7 pin 12 as output for SS
+    LATDSET = _LATD_LATD9_MASK;   // De-assert SS for SPI2
     
     IPC8bits.SPI2IP = 3;          // SPI2 interrupt priority 3
     IPC8bits.SPI2IS = 1;          // SPI2 interrupt sub-priority 1
@@ -330,7 +330,7 @@ void main(void)
 
     ADC_begin();
     
-    SPI2_begin(20000000);
+    SPI2_begin(2000000);
     
     RPD8Rbits.RPD8R = 12; // OC1 on P7 pin 10 (LED PWM)
     RPD0Rbits.RPD0R = 11; // OC2 on P7 pin 14 (tone)
