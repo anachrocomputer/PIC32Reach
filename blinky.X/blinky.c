@@ -58,6 +58,10 @@
 volatile uint32_t MilliSeconds = 0;
 volatile uint32_t SPIword = 0;
 
+volatile int SPINbytes = 0;
+volatile uint8_t *SPIBuf = NULL;
+volatile int SPIDummyReads = 0;
+
 
 /* dally --- CPU busy-loop for crude time delay */
 
@@ -89,7 +93,7 @@ static uint32_t millis(void)
 }
 
 
-void __ISR(_TIMER_4_VECTOR, ipl1) Timer4Handler(void) 
+void __ISR(_TIMER_4_VECTOR, ipl4) Timer4Handler(void) 
 {    
     static int flag = 0;
     
@@ -98,10 +102,6 @@ void __ISR(_TIMER_4_VECTOR, ipl1) Timer4Handler(void)
     LATDCLR = _LATD_LATD9_MASK;   // Assert SS for SPI2
     
     SPI2BUF = SPIword;
-    
-    LATACLR = _LATA_LATA0_MASK;   // Assert SS for SPI3
-    
-    SPI3BUF = SPIword;
     
     if (flag > 31)
     {
@@ -116,9 +116,6 @@ void __ISR(_TIMER_4_VECTOR, ipl1) Timer4Handler(void)
     
     IFS1CLR = _IFS1_SPI2RXIF_MASK;  // Clear SPI2 interrupt flag
     IEC1SET = _IEC1_SPI2RXIE_MASK;  // Enable SPI2 interrupt
-    
-    IFS2CLR = _IFS2_SPI3RXIF_MASK;  // Clear SPI3 interrupt flag
-    IEC2SET = _IEC2_SPI3RXIE_MASK;  // Enable SPI3 interrupt
     
     IFS0CLR = _IFS0_T4IF_MASK;  // Clear Timer 4 interrupt flag
 }
@@ -143,15 +140,36 @@ void __ISR(_SPI_2_VECTOR, ipl3) SPI2Handler(void)
     IEC1CLR = _IEC1_SPI2RXIE_MASK;  // Disable SPI2 interrupt
 }
 
-void __ISR(_SPI_3_VECTOR, ipl4) SPI3Handler(void) 
+void __ISR(_SPI_3_VECTOR, ipl1) SPI3Handler(void) 
 {
     volatile uint32_t junk;
     
-    junk = SPI3BUF;
-    LATASET = _LATA_LATA0_MASK;
-    
-    IFS2CLR = _IFS2_SPI3RXIF_MASK;  // Clear SPI3 interrupt flag
-    IEC2CLR = _IEC2_SPI3RXIE_MASK;  // Disable SPI3 interrupt
+    if (IFS2 & _IFS2_SPI3RXIF_MASK)
+    {
+        junk = SPI3BUF;
+        SPIDummyReads--;
+        
+        IFS2CLR = _IFS2_SPI3RXIF_MASK;  // Clear SPI3 Rx interrupt flag
+        
+        if (SPIDummyReads == 0)
+        {
+            LATASET = _LATA_LATA0_MASK;
+
+            IEC2CLR = _IEC2_SPI3RXIE_MASK;  // Disable SPI3 Rx interrupt
+        }
+    }
+    else if (IFS2 & _IFS2_SPI3TXIF_MASK)
+    {
+        SPI3BUF = *SPIBuf++;        // Transmit next byte
+        SPINbytes--;
+        
+        IFS2CLR = _IFS2_SPI3TXIF_MASK;  // Clear SPI3 Tx interrupt flag
+        
+        if (SPINbytes == 0)
+        {
+            IEC2CLR = _IEC2_SPI3TXIE_MASK;  // Disable SPI3 Tx interrupt
+        }
+    }
 }
 
 static void UART1_begin(const int baud)
@@ -318,7 +336,7 @@ static void SPI3_begin(const int baud)
     
     SPI3BRG = (20000000 / baud) - 1;
     SPI3CONbits.MSTEN = 1;  // Master mode
-    SPI3CONbits.MODE16 = 1; // 16-bit mode
+    SPI3CONbits.MODE16 = 0; // 8-bit mode
     SPI3CONbits.MODE32 = 0;
     SPI3CONbits.CKE = 1;
     SPI3CONbits.STXISEL = 0; // Interrupt on Tx complete
@@ -327,12 +345,55 @@ static void SPI3_begin(const int baud)
     TRISAbits.TRISA0 = 0;   // RA0 pin 17, P1 pin 24 as output for SS
     LATASET = _LATA_LATA0_MASK;   // De-assert SS for SPI3
     
-    IPC12bits.SPI3IP = 4;          // SPI3 interrupt priority 4
+    IPC12bits.SPI3IP = 1;          // SPI3 interrupt priority 1
     IPC12bits.SPI3IS = 1;          // SPI3 interrupt sub-priority 1
     IFS2CLR = _IFS2_SPI3TXIF_MASK;  // Clear SPI3 Tx interrupt flag
     IFS2CLR = _IFS2_SPI3RXIF_MASK;  // Clear SPI3 Rx interrupt flag
     
+    SPINbytes = 0;
+    SPIDummyReads = 0;
+    SPIBuf = NULL;
+    
     SPI3CONbits.ON = 1;
+}
+
+
+bool SPIwrite(uint8_t *buf, const int nbytes)
+{
+    if (SPIDummyReads != 0)     // SPI tranmission still in progress?
+    {
+        return (false);
+    }
+    
+    if ((nbytes <= 0) || (buf == NULL))
+    {
+        return (false);
+    }
+    
+    LATACLR = _LATA_LATA0_MASK;   // Assert SS for SPI3
+    
+    SPIBuf = buf;
+    SPINbytes = nbytes;
+    SPIDummyReads = nbytes;
+    
+    SPI3BUF = *SPIBuf++;          // Transmit first byte
+    SPINbytes--;
+    
+    IFS2CLR = _IFS2_SPI3RXIF_MASK;  // Clear SPI3 Rx interrupt flag
+    IEC2SET = _IEC2_SPI3RXIE_MASK;  // Enable SPI3 Rx interrupt
+    
+    if (SPINbytes > 0)
+    {
+        IFS2CLR = _IFS2_SPI3TXIF_MASK;  // Clear SPI3 Tx interrupt flag
+        IEC2SET = _IEC2_SPI3TXIE_MASK;  // Enable SPI3 Tx interrupt
+    }
+    
+    return (true);
+}
+
+int SPIbytesPending(void)
+{
+    return (SPIDummyReads);
 }
 
 /* toneT2 --- generate a tone of the given frequency via Timer 2 and OC2 */
@@ -353,6 +414,8 @@ void toneT2(const int freq)
 
 void main(void)
 {
+    static uint8_t spi[32] = {1, 2, 3, 4, 5, 6, 7, 8};
+    static uint8_t hello[] = "Hello, world\r\n";
     char buf[32];
     int i;
     uint16_t ana;
@@ -434,7 +497,7 @@ void main(void)
     IFS0CLR = _IFS0_T1IF_MASK;  // Clear Timer 1 interrupt flag
     IEC0SET = _IEC0_T1IE_MASK;  // Enable Timer 1 interrupt
     
-    IPC4bits.T4IP = 1;          // Timer 4 interrupt priority 1
+    IPC4bits.T4IP = 4;          // Timer 4 interrupt priority 4
     IPC4bits.T4IS = 1;          // Timer 4 interrupt sub-priority 1
     IFS0CLR = _IFS0_T4IF_MASK;  // Clear Timer 4 interrupt flag
     IEC0SET = _IEC0_T4IE_MASK;  // Enable Timer 4 interrupt
@@ -454,6 +517,27 @@ void main(void)
         SPIword = 0x0000;
         OC1RS = 0;
         toneT2(440);
+        SPIwrite(spi, 1);
+        
+        while (SPIbytesPending() > 0)
+            ;
+        
+        SPIwrite(spi, 2);
+        
+        while (SPIbytesPending() > 0)
+            ;
+        
+        SPIwrite(spi, 3);
+        
+        while (SPIbytesPending() > 0)
+            ;
+        
+        SPIwrite(spi, 4);
+        
+        while (SPIbytesPending() > 0)
+            ;
+        
+        SPIwrite(spi, 5);
         
         delayms(500);
         
@@ -475,6 +559,7 @@ void main(void)
         SPIword = 0xAA55;
         OC1RS = 128;
         toneT2(0);
+        SPIwrite(spi, 8);
         
         delayms(500);
         
@@ -486,6 +571,7 @@ void main(void)
         SPIword = 0x55AA;
         OC1RS = 256;
         toneT2(880);
+        SPIwrite(hello, sizeof (hello) - 1);
         
         delayms(500);
         
