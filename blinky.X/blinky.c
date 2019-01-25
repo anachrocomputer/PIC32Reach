@@ -1,4 +1,4 @@
-/* blinky --- blink five LEDs on PIC32 dev board                       */
+/* blinky --- blink five LEDs on PIC32 dev board            2019-01-10 */
 /* Copyright (c) 2019 John Honniball. All rights reserved              */
 
 /*
@@ -54,6 +54,41 @@
 #define LED3        LATEbits.LATE1
 #define LED4        LATAbits.LATA7
 #define LED5        LATAbits.LATA6
+
+#define UART_RX_BUFFER_SIZE  (128)
+#define UART_RX_BUFFER_MASK (UART_RX_BUFFER_SIZE - 1)
+#if (UART_RX_BUFFER_SIZE & UART_RX_BUFFER_MASK) != 0
+#error UART_RX_BUFFER_SIZE must be a power of two and <= 256
+#endif
+
+#define UART_TX_BUFFER_SIZE  (128)
+#define UART_TX_BUFFER_MASK (UART_TX_BUFFER_SIZE - 1)
+#if (UART_TX_BUFFER_SIZE & UART_TX_BUFFER_MASK) != 0
+#error UART_TX_BUFFER_SIZE must be a power of two and <= 256
+#endif
+
+struct UART_RX_BUFFER
+{
+    volatile uint8_t head;
+    volatile uint8_t tail;
+    uint8_t buf[UART_RX_BUFFER_SIZE];
+};
+
+struct UART_TX_BUFFER
+{
+    volatile uint8_t head;
+    volatile uint8_t tail;
+    uint8_t buf[UART_TX_BUFFER_SIZE];
+};
+
+struct UART_BUFFER
+{
+    struct UART_TX_BUFFER tx;
+    struct UART_RX_BUFFER rx;
+};
+
+// UART buffers
+static struct UART_BUFFER U4Buf;
 
 volatile uint32_t MilliSeconds = 0;
 volatile uint32_t SPIword = 0;
@@ -172,6 +207,50 @@ void __ISR(_SPI_3_VECTOR, ipl1) SPI3Handler(void)
     }
 }
 
+void __ISR(_UART_4_VECTOR, ipl1) UART4Handler(void) 
+{
+    if (IFS2bits.U4TXIF)
+    {
+        if (U4Buf.tx.head != U4Buf.tx.tail) // Is there anything to send?
+        {
+            const uint8_t tmptail = (U4Buf.tx.tail + 1) & UART_TX_BUFFER_MASK;
+            
+            U4Buf.tx.tail = tmptail;
+
+            U4TXREG = U4Buf.tx.buf[tmptail];     // Transmit one byte
+        }
+        else
+        {
+            IEC2CLR = _IEC2_U4TXIE_MASK;         // Nothing left to send; disable Tx interrupt
+        }
+        
+        IFS2CLR = _IFS2_U4TXIF_MASK;  // Clear UART4 Tx interrupt flag
+    }
+    
+    if (IFS2bits.U4RXIF)
+    {
+        const uint8_t tmphead = (U4Buf.rx.head + 1) & UART_RX_BUFFER_MASK;
+        const uint8_t ch = U4RXREG;   // Read received byte from UART
+        
+        if (tmphead == U4Buf.rx.tail)   // Is receive buffer full?
+        {
+             // Buffer is full; discard new byte
+        }
+        else
+        {
+            U4Buf.rx.head = tmphead;
+            U4Buf.rx.buf[tmphead] = ch;   // Store byte in buffer
+        }
+        
+        IFS2CLR = _IFS2_U4RXIF_MASK;  // Clear UART4 Rx interrupt flag
+    }
+    
+    if (IFS2bits.U4EIF)
+    {
+        IFS2CLR = _IFS2_U4EIF_MASK;   // Clear UART4 error interrupt flag
+    }
+}
+
 static void UART1_begin(const int baud)
 {
     /* Configure PPS pins */
@@ -193,6 +272,7 @@ static void UART2_begin(const int baud)
 {
     /* Configure PPS pins */
     RPG0Rbits.RPG0R = 1;    // U2Tx on pin 90, RPG0
+    U2RXRbits.U2RXR = 12;   // U2Rx on pin 89, RPG1 (5V tolerant)
     
     /* Configure USART2 */
     U2MODEbits.UEN = 3;     // Use just Rx/Tx; no handshaking
@@ -209,6 +289,7 @@ static void UART3_begin(const int baud)
 {
     /* Configure PPS pins */
     RPF1Rbits.RPF1R = 1;    // U3Tx on pin 88, RPF1
+    U3RXRbits.U3RXR = 4;    // U3Rx on pin 87, RPF0
     
     /* Configure USART3 */
     U3MODEbits.UEN = 3;     // Use just Rx/Tx; no handshaking
@@ -225,22 +306,73 @@ static void UART4_begin(const int baud)
 {
     /* Configure PPS pins */
     RPD4Rbits.RPD4R = 2;    // U4Tx on pin 81, RPD4
+    U4RXRbits.U4RXR = 6;    // U4Rx on pin 82, RPD5 (5V tolerant)
     
+    U4Buf.tx.head = 0;
+    U4Buf.tx.tail = 0;
+    U4Buf.rx.head = 0;
+    U4Buf.rx.tail = 0;
+  
     /* Configure USART4 */
     U4MODEbits.UEN = 3;     // Use just Rx/Tx; no handshaking
     
     U4STAbits.UTXEN = 1;    // Enable Tx
-    U4STAbits.URXEN = 1;    // Enable Rx (unused at present)
+    U4STAbits.URXEN = 1;    // Enable Rx
     
     U4BRG = (40000000 / (baud * 16)) - 1;
     
+    IPC9bits.U4IP = 1;          // UART4 interrupt priority 1
+    IPC9bits.U4IS = 2;          // UART4 interrupt sub-priority 2
+    
+    IFS2CLR = _IFS2_U4TXIF_MASK;  // Clear UART4 Tx interrupt flag
+    IFS2CLR = _IFS2_U4RXIF_MASK;  // Clear UART4 Rx interrupt flag
+    IFS2CLR = _IFS2_U4EIF_MASK;   // Clear UART4 error interrupt flag
+    
+    IEC2SET = _IEC2_U4RXIE_MASK;  // Enable UART4 Rx interrupt
+    IEC2SET = _IEC2_U4EIE_MASK;   // Enable UART4 error interrupt
+    
     U4MODESET = _U4MODE_ON_MASK;      // Enable USART4
 }
+
+
+uint8_t UART4RxByte(void)
+{
+    const uint8_t tmptail = (U4Buf.rx.tail + 1) & UART_RX_BUFFER_MASK;
+    
+    while (U4Buf.rx.head == U4Buf.rx.tail)  // Wait, if buffer is empty
+        ;
+    
+    U4Buf.rx.tail = tmptail;
+    
+    return (U4Buf.rx.buf[tmptail]);
+}
+
+
+void UART4TxByte(const uint8_t data)
+{
+    const uint8_t tmphead = (U4Buf.tx.head + 1) & UART_TX_BUFFER_MASK;
+    
+    while (tmphead == U4Buf.tx.tail)   // Wait, if buffer is full
+        ;
+
+    U4Buf.tx.buf[tmphead] = data;
+    U4Buf.tx.head = tmphead;
+
+    IEC2SET = _IEC2_U4TXIE_MASK;       // Enable UART4 Tx interrupt
+}
+
+
+bool UART4RxAvailable(void)
+{
+    return (U4Buf.rx.head != U4Buf.rx.tail);
+}
+
 
 static void UART5_begin(const int baud)
 {
     /* Configure PPS pins */
     RPD12Rbits.RPD12R = 4;  // U5Tx on pin 79, RPD12
+    U5RXRbits.U5RXR = 0;    // U5Rx on pin 76, RPD1
     
     /* Configure USART5 */
     U5MODEbits.UEN = 3;     // Use just Rx/Tx; no handshaking
@@ -419,6 +551,7 @@ void main(void)
     char buf[32];
     int i;
     uint16_t ana;
+    uint8_t ch;
     
     /* Configure tri-state registers*/
     TRISEbits.TRISE6 = 0;   // LED1 as output
@@ -504,6 +637,9 @@ void main(void)
     
     __asm__("EI");              // Global interrupt enable
     
+    UART4TxByte('\r');
+    UART4TxByte('\n');
+    
     while(1)
     {
         U1TXREG = 'A';
@@ -543,7 +679,16 @@ void main(void)
         
         ana = analogRead(6);
         
-        sprintf(buf, "%dms %d\r\n", millis(), ana);
+        if (UART4RxAvailable())
+        {
+            ch = UART4RxByte();
+        }
+        else
+        {
+            ch = '*';
+        }
+        
+        sprintf(buf, "%dms %d %c\r\n", millis(), ana, ch);
         
         for (i = 0; buf[i] != '\0'; i++)
         {
@@ -575,7 +720,14 @@ void main(void)
         
         delayms(500);
         
-        U4TXREG = 'D';
+        UART4TxByte('D');
+        UART4TxByte('E');
+        UART4TxByte('A');
+        UART4TxByte('D');
+        UART4TxByte('B');
+        UART4TxByte('E');
+        UART4TxByte('E');
+        UART4TxByte('F');
         
         LED3 = 1;
         LED4 = 0;
