@@ -379,9 +379,6 @@ static void ADC_begin(void)
     AD1CHSbits.CH0SA = 6; // Mux to AN6
     AD1CHSbits.CH0NA = 0; // Negative input is Vr-    
     
-    ANSELBbits.ANSB6 = 1;   // RB6, AN6, pin 26, P1-37 analog
-    TRISBbits.TRISB6 = 1;   // RB6, AN6, pin 26, P1-37 input
-    
     AD1CON1SET = _AD1CON1_ON_MASK;
 }
 
@@ -572,11 +569,15 @@ static void TRIS_begin(void)
     ANSELDbits.ANSD6 = 1;   // U4 current sense pin 83, RD6, AN42, analog
     ANSELDbits.ANSD2 = 1;   // U5 current sense pin 77, RD2, AN25, analog
     
+    ANSELBbits.ANSB6 = 1;   // Pot on pin 26, P1-37, RB6, AN6 analog
+
     TRISEbits.TRISE4 = 1;   // U1 current sense pin 100, RE4, AN21, input
     TRISEbits.TRISE0 = 1;   // U2 current sense pin 93, RE0, AN46, input
     TRISDbits.TRISD7 = 1;   // U3 current sense pin 84, RD7, AN43, input
     TRISDbits.TRISD6 = 1;   // U4 current sense pin 83, RD6, AN42, input
     TRISDbits.TRISD2 = 1;   // U5 current sense pin 77, RD2, AN25, input
+    
+    TRISBbits.TRISB6 = 1;   // Pot on pin 26, P1-37, RB6, AN6 input
     
     TRISAbits.TRISA4 = 0;   // RA4 pin 60, P7 pin 6 as output (timer toggle)
 }
