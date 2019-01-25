@@ -253,11 +253,6 @@ void __ISR(_UART_4_VECTOR, ipl1) UART4Handler(void)
 
 static void UART1_begin(const int baud)
 {
-    /* Configure PPS pins */
-    RPE5Rbits.RPE5R = 3;    // U1Tx on pin 3, RPE5
-    U1RXRbits.U1RXR = 10;   // U1Rx on pin 6, RPC1
-    
-    /* Configure USART1 */
     U1MODEbits.UEN = 3;     // Use just Rx/Tx; no handshaking
     
     U1STAbits.UTXEN = 1;    // Enable Tx
@@ -270,11 +265,6 @@ static void UART1_begin(const int baud)
 
 static void UART2_begin(const int baud)
 {
-    /* Configure PPS pins */
-    RPG0Rbits.RPG0R = 1;    // U2Tx on pin 90, RPG0
-    U2RXRbits.U2RXR = 12;   // U2Rx on pin 89, RPG1 (5V tolerant)
-    
-    /* Configure USART2 */
     U2MODEbits.UEN = 3;     // Use just Rx/Tx; no handshaking
     
     U2STAbits.UTXEN = 1;    // Enable Tx
@@ -287,11 +277,6 @@ static void UART2_begin(const int baud)
 
 static void UART3_begin(const int baud)
 {
-    /* Configure PPS pins */
-    RPF1Rbits.RPF1R = 1;    // U3Tx on pin 88, RPF1
-    U3RXRbits.U3RXR = 4;    // U3Rx on pin 87, RPF0
-    
-    /* Configure USART3 */
     U3MODEbits.UEN = 3;     // Use just Rx/Tx; no handshaking
     
     U3STAbits.UTXEN = 1;    // Enable Tx
@@ -304,16 +289,11 @@ static void UART3_begin(const int baud)
 
 static void UART4_begin(const int baud)
 {
-    /* Configure PPS pins */
-    RPD4Rbits.RPD4R = 2;    // U4Tx on pin 81, RPD4
-    U4RXRbits.U4RXR = 6;    // U4Rx on pin 82, RPD5 (5V tolerant)
-    
     U4Buf.tx.head = 0;
     U4Buf.tx.tail = 0;
     U4Buf.rx.head = 0;
     U4Buf.rx.tail = 0;
-  
-    /* Configure USART4 */
+
     U4MODEbits.UEN = 3;     // Use just Rx/Tx; no handshaking
     
     U4STAbits.UTXEN = 1;    // Enable Tx
@@ -370,11 +350,6 @@ bool UART4RxAvailable(void)
 
 static void UART5_begin(const int baud)
 {
-    /* Configure PPS pins */
-    RPD12Rbits.RPD12R = 4;  // U5Tx on pin 79, RPD12
-    U5RXRbits.U5RXR = 0;    // U5Rx on pin 76, RPD1
-    
-    /* Configure USART5 */
     U5MODEbits.UEN = 3;     // Use just Rx/Tx; no handshaking
     
     U5STAbits.UTXEN = 1;    // Enable Tx
@@ -430,16 +405,6 @@ uint16_t analogRead(const int chan)
 
 static void SPI2_begin(const int baud)
 {
-    /* Configure SPI1 */
-    // SCK1 on pin 70 - can't use on this PCB
-    //SDI1Rbits.SDI1R = 0;   // SDI1 on RPD3
-    //RPC13Rbits.RPC13R = 8; // SDO1 on RPC13
-    
-    /* Configure SPI2 */
-    // SCK2 on pin 10, RG6, P1 pin 32
-    SDI2Rbits.SDI2R = 0;   // SDI2 on RPD3, pin 78
-    RPC13Rbits.RPC13R = 6; // SDO2 on RPC13, pin 73, P7 pin 16
-    
     SPI2BRG = (20000000 / baud) - 1;
     SPI2CONbits.MSTEN = 1;  // Master mode
     SPI2CONbits.MODE16 = 1; // 16-bit mode
@@ -461,11 +426,6 @@ static void SPI2_begin(const int baud)
 
 static void SPI3_begin(const int baud)
 {    
-    /* Configure SPI3 */
-    // SCK3 on pin 39, RF13, P1 pin 15
-    SDI3Rbits.SDI3R = 0;   // SDI3 on RPD2, pin 77
-    RPG8Rbits.RPG8R = 14;  // SDO3 on RPG8, pin 12, P1 pin 28
-    
     SPI3BRG = (20000000 / baud) - 1;
     SPI3CONbits.MSTEN = 1;  // Master mode
     SPI3CONbits.MODE16 = 0; // 8-bit mode
@@ -544,6 +504,84 @@ void toneT2(const int freq)
     }
 }
 
+
+/* PPS_begin --- map Peripheral Pin Select to suit dev board */
+
+static void PPS_begin(void)
+{
+    /* Configure USART1 */
+    RPE5Rbits.RPE5R = 3;    // U1Tx on pin 3, RPE5
+    U1RXRbits.U1RXR = 10;   // U1Rx on pin 6, RPC1
+    
+    /* Configure USART2 */
+    RPG0Rbits.RPG0R = 1;    // U2Tx on pin 90, RPG0
+    U2RXRbits.U2RXR = 12;   // U2Rx on pin 89, RPG1 (5V tolerant)
+    
+    /* Configure USART3 */
+    RPF1Rbits.RPF1R = 1;    // U3Tx on pin 88, RPF1
+    U3RXRbits.U3RXR = 4;    // U3Rx on pin 87, RPF0
+    
+    /* Configure USART4 */
+    RPD4Rbits.RPD4R = 2;    // U4Tx on pin 81, RPD4
+    U4RXRbits.U4RXR = 6;    // U4Rx on pin 82, RPD5 (5V tolerant)
+    
+    /* Configure USART5 */
+    RPD12Rbits.RPD12R = 4;  // U5Tx on pin 79, RPD12
+    U5RXRbits.U5RXR = 0;    // U5Rx on pin 76, RPD1
+    
+    /* Configure OC pins (PWM) */
+    RPD8Rbits.RPD8R = 12; // OC1 on P7 pin 10 (LED PWM)
+    RPD0Rbits.RPD0R = 11; // OC2 on P7 pin 14 (tone)
+    
+    /* Configure SPI1 */
+    // SCK1 on pin 70 RD10 - can't use on this PCB
+    //SDI1Rbits.SDI1R = 0;   // SDI1 on RPD3
+    //RPC13Rbits.RPC13R = 8; // SDO1 on RPC13
+    
+    /* Configure SPI2 */
+    // SCK2 on pin 10, RG6, P1 pin 32
+    SDI2Rbits.SDI2R = 0;   // SDI2 on RPD3, pin 78
+    RPC13Rbits.RPC13R = 6; // SDO2 on RPC13, pin 73, P7 pin 16
+    
+    /* Configure SPI3 */
+    // SCK3 on pin 39, RF13, P1 pin 15
+    SDI3Rbits.SDI3R = 0;   // SDI3 on RPD2, pin 77
+    RPG8Rbits.RPG8R = 14;  // SDO3 on RPG8, pin 12, P1 pin 28
+}
+
+
+/* TRIS_begin --- switch GPIO pins to input or output as required */
+
+static void TRIS_begin(void)
+{
+    TRISEbits.TRISE6 = 0;   // LED1 pin 4 as output
+    TRISEbits.TRISE7 = 0;   // LED2 pin 5 as output
+    TRISEbits.TRISE1 = 0;   // LED3 pin 94 as output
+    TRISAbits.TRISA7 = 0;   // LED4 pin 92 as output
+    TRISAbits.TRISA6 = 0;   // LED5 pin 91 as output
+    
+    TRISGbits.TRISG15 = 0;  // U1EN pin 1 as output
+    TRISEbits.TRISE2 = 0;   // U2EN pin 98 as output
+    TRISGbits.TRISG12 = 0;  // U3EN pin 96 as output
+    TRISDbits.TRISD13 = 0;  // U4EN pin 80 as output
+    TRISDbits.TRISD11 = 0;  // U5EN pin 71 as output
+    
+    ANSELEbits.ANSE4 = 1;   // U1 current sense pin 100, RE4, AN21, analog
+    ANSELEbits.ANSE0 = 1;   // U2 current sense pin 93, RE0, AN46, analog
+    ANSELDbits.ANSD7 = 1;   // U3 current sense pin 84, RD7, AN43, analog
+    ANSELDbits.ANSD6 = 1;   // U4 current sense pin 83, RD6, AN42, analog
+    ANSELDbits.ANSD2 = 1;   // U5 current sense pin 77, RD2, AN25, analog
+    
+    TRISEbits.TRISE4 = 1;   // U1 current sense pin 100, RE4, AN21, input
+    TRISEbits.TRISE0 = 1;   // U2 current sense pin 93, RE0, AN46, input
+    TRISDbits.TRISD7 = 1;   // U3 current sense pin 84, RD7, AN43, input
+    TRISDbits.TRISD6 = 1;   // U4 current sense pin 83, RD6, AN42, input
+    TRISDbits.TRISD2 = 1;   // U5 current sense pin 77, RD2, AN25, input
+    
+    TRISAbits.TRISA4 = 0;   // RA4 pin 60, P7 pin 6 as output (timer toggle)
+}
+
+
 void main(void)
 {
     static uint8_t spi[32] = {1, 2, 3, 4, 5, 6, 7, 8};
@@ -553,14 +591,18 @@ void main(void)
     uint16_t ana;
     uint8_t ch;
     
-    /* Configure tri-state registers*/
-    TRISEbits.TRISE6 = 0;   // LED1 as output
-    TRISEbits.TRISE7 = 0;   // LED2 as output
-    TRISEbits.TRISE1 = 0;   // LED3 as output
-    TRISAbits.TRISA7 = 0;   // LED5 as output
-    TRISAbits.TRISA6 = 0;   // LED5 as output
+    /* Set up peripherals to match pin connections on PCB */
+    PPS_begin();
     
-    TRISAbits.TRISA4 = 0;   // P7 pin 6 as output (timer toggle)
+    /* Configure tri-state registers*/
+    TRIS_begin();
+    
+    /* Switch off the MOSFETs */
+    LATGbits.LATG15 = 0;  // U1EN pin 1 OFF
+    LATEbits.LATE2 = 0;   // U2EN pin 98 OFF
+    LATGbits.LATG12 = 0;  // U3EN pin 96 OFF
+    LATDbits.LATD13 = 0;  // U4EN pin 80 OFF
+    LATDbits.LATD11 = 0;  // U5EN pin 71 OFF
     
     UART1_begin(19200);
     UART2_begin(9600);
@@ -572,9 +614,6 @@ void main(void)
     
     SPI2_begin(2000000);
     SPI3_begin(1000000);
-    
-    RPD8Rbits.RPD8R = 12; // OC1 on P7 pin 10 (LED PWM)
-    RPD0Rbits.RPD0R = 11; // OC2 on P7 pin 14 (tone)
     
     /* Configure Timer 2 for tone generation via PWM */
     T2CONbits.TCKPS = 6;        // Timer 2 prescale: 64
