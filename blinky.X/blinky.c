@@ -544,6 +544,17 @@ static void PPS_begin(void)
     // SCK3 on pin 39, RF13, P1 pin 15
     SDI3Rbits.SDI3R = 0;   // SDI3 on RPD2, pin 77
     RPG8Rbits.RPG8R = 14;  // SDO3 on RPG8, pin 12, P1 pin 28
+    
+    /* Configure SPI4 */
+    // SCK4 on pin 48, RD15 blocked by Main current sense
+    
+    /* Configure I2C1 */
+    // SCL1 on RA14, pin 66, P1 pin 19
+    // SDA1 on RA15, pin 67, P1 pin 21
+    
+    /* Configure I2C2 */
+    // SCL2 on RA2, pin 58, P7 pin 20
+    // SDA2 on RA3, pin 59, P7 pin 22
 }
 
 
@@ -563,20 +574,35 @@ static void TRIS_begin(void)
     TRISDbits.TRISD13 = 0;  // U4EN pin 80 as output
     TRISDbits.TRISD11 = 0;  // U5EN pin 71 as output
     
+    TRISEbits.TRISE3 = 1;   // U1FAULT pin 99 as input
+    TRISGbits.TRISG13 = 1;  // U2FAULT pin 97 as input
+    TRISGbits.TRISG14 = 1;  // U3FAULT pin 95 as input
+    TRISDbits.TRISD3 = 1;   // U4FAULT pin 78 as input
+    TRISDbits.TRISD10 = 1;  // U5FAULT pin 70 as input
+    TRISFbits.TRISF5 = 1;   // Main current FAULT pin 50 as input
+    TRISFbits.TRISF4 = 1;   // Motor current FAULT pin 49 as input
+    
     ANSELEbits.ANSE4 = 1;   // U1 current sense pin 100, RE4, AN21, analog
     ANSELEbits.ANSE0 = 1;   // U2 current sense pin 93, RE0, AN46, analog
     ANSELDbits.ANSD7 = 1;   // U3 current sense pin 84, RD7, AN43, analog
     ANSELDbits.ANSD6 = 1;   // U4 current sense pin 83, RD6, AN42, analog
     ANSELDbits.ANSD2 = 1;   // U5 current sense pin 77, RD2, AN25, analog
-    
-    ANSELBbits.ANSB6 = 1;   // Pot on pin 26, P1-37, RB6, AN6 analog
+    ANSELDbits.ANSD14 = 1;  // Main current sense pin 47, RD14, AN36, analog
+    ANSELDbits.ANSD15 = 1;  // Motor current sense pin 48, RD15, AN37, analog (blocks SCK4)
 
     TRISEbits.TRISE4 = 1;   // U1 current sense pin 100, RE4, AN21, input
     TRISEbits.TRISE0 = 1;   // U2 current sense pin 93, RE0, AN46, input
     TRISDbits.TRISD7 = 1;   // U3 current sense pin 84, RD7, AN43, input
     TRISDbits.TRISD6 = 1;   // U4 current sense pin 83, RD6, AN42, input
     TRISDbits.TRISD2 = 1;   // U5 current sense pin 77, RD2, AN25, input
+    TRISDbits.TRISD14 = 1;  // Main current sense pin 47, RD14, AN36, input
+    TRISDbits.TRISD15 = 1;  // Motor current sense pin 48, RD15, AN37, input (blocks SCK4)
     
+    TRISBbits.TRISB15 = 0;  // HV_EN pin 44 as output
+    
+    // TODO: Add head LEDs and Add-On ports on daughter board
+    
+    ANSELBbits.ANSB6 = 1;   // Pot on pin 26, P1-37, RB6, AN6 analog
     TRISBbits.TRISB6 = 1;   // Pot on pin 26, P1-37, RB6, AN6 input
     
     TRISAbits.TRISA4 = 0;   // RA4 pin 60, P7 pin 6 as output (timer toggle)
@@ -597,6 +623,8 @@ void main(void)
     
     /* Configure tri-state registers*/
     TRIS_begin();
+    
+    LATBbits.LATB15 = 0;  // HV_EN pin 44 LOW (6V regulator OFF)
     
     /* Switch off the MOSFETs */
     LATGbits.LATG15 = 0;  // U1EN pin 1 OFF
