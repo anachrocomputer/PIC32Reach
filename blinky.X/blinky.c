@@ -485,6 +485,137 @@ int SPIbytesPending(void)
     return (SPIDummyReads);
 }
 
+
+static void I2C1_begin(const int speed)
+{
+    if (speed > 200)
+    {
+        I2C1BRG = 0x2c;     // 400kHz
+    }
+    else
+    {
+        I2C1BRG = 0xc2;     // 100kHz
+    }
+    
+    I2C1CONSET = _I2C1CON_ON_MASK;  // Enable I2C1
+}
+
+
+/* I2C1_DevicePoll --- poll the I2C bus for a device at a given address */
+
+static bool I2C1_DevicePoll(const uint8_t addr)
+{
+    bool found;
+
+    I2C1CONSET = _I2C1CON_SEN_MASK; // Initiate start condition
+
+    while (I2C1CONbits.SEN != 0)
+        ;
+
+    I2C1TRN = addr | 0x01; // Use I2C read address, D0 = 1
+
+    while (I2C1STATbits.TRSTAT)
+        ;
+
+    if (I2C1STATbits.ACKSTAT)   // ACKSTAT == 1 => NACK
+    {
+        found = false;
+    }
+    else
+    {
+        found = true;
+    }
+
+    I2C1CONSET = _I2C1CON_PEN_MASK; // Initiate stop condition
+
+    while (I2C1CONbits.PEN != 0)
+        ;
+
+    return (found);
+}
+
+
+/* I2C1_ReadIMU --- read ID register in MPU9250 IMU via I2C */
+
+static uint8_t I2C1_ReadIMU(void)
+{
+    uint8_t regID;
+
+    I2C1CONSET = _I2C1CON_SEN_MASK; // Initiate start condition
+
+    while (I2C1CONbits.SEN != 0)
+        ;
+
+    I2C1TRN = 0xd0;
+
+    while (I2C1STATbits.TRSTAT)
+        ;
+
+    if (I2C1STATbits.ACKSTAT)   // ACKSTAT == 1 => NACK
+    {
+        LED5 = 0;   // Light LED5 on NACK
+    }
+    else
+    {
+        LED5 = 1;
+    }
+
+    I2C1TRN = 117;  // MPU9250 WHOAMI register
+
+    while (I2C1STATbits.TRSTAT)
+        ;
+
+    if (I2C1STATbits.ACKSTAT)   // ACKSTAT == 1 => NACK
+    {
+        LED5 = 0;   // Light LED5 on NACK
+    }
+    else
+    {
+        LED5 = 1;
+    }
+
+    I2C1CONSET = _I2C1CON_RSEN_MASK; // Initiate repeated start condition
+
+    while (I2C1CONbits.RSEN != 0)
+        ;
+
+    I2C1TRN = 0xd1;
+
+    while (I2C1STATbits.TRSTAT)
+        ;
+
+    if (I2C1STATbits.ACKSTAT)   // ACKSTAT == 1 => NACK
+    {
+        LED5 = 0;   // Light LED5 on NACK
+    }
+    else
+    {
+        LED5 = 1;
+    }
+
+    I2C1CONSET = _I2C1CON_RCEN_MASK; // Initiate receive mode
+
+    while (I2C1STATbits.RBF == 0)
+        ;
+
+    regID = I2C1RCV;
+
+    I2C1CONbits.ACKDT = 0;
+
+    I2C1CONSET = _I2C1CON_ACKEN_MASK; // Send master ACK bit
+
+    while (I2C1CONbits.ACKEN != 0)
+        ;
+
+    I2C1CONSET = _I2C1CON_PEN_MASK; // Initiate stop condition
+
+    while (I2C1CONbits.PEN != 0)
+        ;
+    
+    return (regID);
+}
+
+
 /* toneT2 --- generate a tone of the given frequency via Timer 2 and OC2 */
 
 void toneT2(const int freq)
@@ -641,6 +772,8 @@ void main(void)
 
     ADC_begin();
     
+    I2C1_begin(100);
+    
     SPI2_begin(2000000);
     SPI3_begin(1000000);
     
@@ -708,6 +841,8 @@ void main(void)
     UART4TxByte('\r');
     UART4TxByte('\n');
     
+    delayms(20);
+    
     while(1)
     {
         U1TXREG = 'A';
@@ -717,6 +852,11 @@ void main(void)
         LED3 = 1;
         LED4 = 1;
         LED5 = 1;
+        
+        if (I2C1_DevicePoll(0xA0) == false)  // A0, A2 and D0 will ACK
+        {
+            LED5 = 0;
+        }
         
         SPIword = 0x0000;
         OC1RS = 0;
@@ -768,6 +908,14 @@ void main(void)
         
         LED1 = 1;
         LED2 = 0;
+        LED3 = 1;
+        LED4 = 1;
+        LED5 = 1;
+        
+        if (I2C1_DevicePoll(0xA2) == false)  // A0, A2 and D0 will ACK
+        {
+            LED5 = 0;
+        }
         
         SPIword = 0xAA55;
         OC1RS = 128;
@@ -778,8 +926,16 @@ void main(void)
         
         U3TXREG = 'C';
         
+        LED1 = 1;
         LED2 = 1;
         LED3 = 0;
+        LED4 = 1;
+        LED5 = 1;
+        
+        if (I2C1_DevicePoll(0xD0) == false)  // A0, A2 and D0 will ACK
+        {
+            LED5 = 0;
+        }
         
         SPIword = 0x55AA;
         OC1RS = 256;
@@ -797,8 +953,11 @@ void main(void)
         UART4TxByte('E');
         UART4TxByte('F');
         
+        LED1 = 1;
+        LED2 = 1;
         LED3 = 1;
         LED4 = 0;
+        LED5 = 1;
         
         SPIword = 0xFF00;
         OC1RS = 512;
@@ -808,6 +967,9 @@ void main(void)
         
         U5TXREG = 'E';
         
+        LED1 = 1;
+        LED2 = 1;
+        LED3 = 1;
         LED4 = 1;
         LED5 = 0;
         
