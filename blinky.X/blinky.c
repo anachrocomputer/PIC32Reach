@@ -629,7 +629,7 @@ static uint8_t I2C1_ReadIMU(void)
 
     I2C1_Start();
 
-    I2C1_Transmit(0xd0);
+    I2C1_Transmit(0xd0);    // IMU write address
 
     if (I2C1STATbits.ACKSTAT)   // ACKSTAT == 1 => NACK
     {
@@ -653,7 +653,7 @@ static uint8_t I2C1_ReadIMU(void)
 
     I2C1_RepeatStart();
 
-    I2C1_Transmit(0xd1);
+    I2C1_Transmit(0xd1);    // IMU read address
 
     if (I2C1STATbits.ACKSTAT)   // ACKSTAT == 1 => NACK
     {
@@ -681,6 +681,71 @@ static uint8_t I2C1_ReadIMU(void)
     I2C1_Stop();
     
     return (regID);
+}
+
+
+/* I2C1_EERead --- read CAT24C256 EEPROM via I2C */
+
+static int I2C1_EERead(const uint8_t i2cAddr, const uint16_t byteAddr, const int nBytes, uint8_t buf[])
+{
+    int i;
+    
+    I2C1_Start();
+
+    I2C1_Transmit(i2cAddr & 0xfe);    // EEPROM write address
+
+    if (I2C1STATbits.ACKSTAT)   // ACKSTAT == 1 => NACK
+    {
+        I2C1_Stop();
+        return (0);
+    }
+
+    I2C1_Transmit(byteAddr >> 8);  // Address HI byte
+
+    if (I2C1STATbits.ACKSTAT)   // ACKSTAT == 1 => NACK
+    {
+        I2C1_Stop();
+        return (0);
+    }
+    
+    I2C1_Transmit(byteAddr & 0xff);  // Address LO byte
+
+    if (I2C1STATbits.ACKSTAT)   // ACKSTAT == 1 => NACK
+    {
+        I2C1_Stop();
+        return (0);
+    }
+
+    I2C1_RepeatStart();
+
+    I2C1_Transmit(i2cAddr | 0x01);    // EEPROM read address
+
+    if (I2C1STATbits.ACKSTAT)   // ACKSTAT == 1 => NACK
+    {
+        I2C1_Stop();
+        return (0);
+    }
+
+    for (i = 0; i < nBytes; i++)
+    {
+        I2C1CONSET = _I2C1CON_RCEN_MASK; // Initiate receive mode
+
+        while (I2C1STATbits.RBF == 0)
+            ;
+
+        buf[i] = I2C1RCV;
+
+        I2C1CONbits.ACKDT = 0;
+
+        I2C1CONSET = _I2C1CON_ACKEN_MASK; // Send master ACK bit
+
+        while (I2C1CONbits.ACKEN != 0)
+            ;
+    }
+
+    I2C1_Stop();
+    
+    return (nBytes);
 }
 
 
@@ -812,6 +877,7 @@ void main(void)
 {
     static uint8_t spi[32] = {1, 2, 3, 4, 5, 6, 7, 8};
     static uint8_t hello[] = "Hello, world\r\n";
+    uint8_t eebuf[256];
     char buf[32];
     int i;
     uint16_t ana;
@@ -1027,6 +1093,8 @@ void main(void)
         LED4 = 0;
         LED5 = 1;
         
+        I2C1_EERead(0xA0, 0, 16, eebuf);
+        
         SPIword = 0xFF00;
         OC1RS = 512;
         toneT2(0);
@@ -1040,6 +1108,8 @@ void main(void)
         LED3 = 1;
         LED4 = 1;
         LED5 = 0;
+        
+        I2C1_EERead(0xA2, 0, 16, eebuf);
         
         SPIword = 0xFF00;
         OC1RS = 1023;
