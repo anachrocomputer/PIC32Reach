@@ -105,7 +105,7 @@ static void dally(const int loops)
     volatile int dally;
     
     for (dally = 0; dally < loops; dally++)
-            ;
+        ;
 }
 
 
@@ -501,21 +501,99 @@ static void I2C1_begin(const int speed)
 }
 
 
+/* I2C1_Start --- send a Start condition and wait for completion */
+
+static void I2C1_Start(void)
+{
+    I2C1CONSET = _I2C1CON_SEN_MASK; // Initiate start condition
+
+    while (I2C1CONbits.SEN != 0)
+        ;
+}
+
+
+/* I2C1_RepeatStart --- send a Repeated Start condition and wait for completion */
+
+static void I2C1_RepeatStart(void)
+{
+    I2C1CONSET = _I2C1CON_RSEN_MASK; // Initiate repeated start condition
+
+    while (I2C1CONbits.RSEN != 0)
+        ;
+}
+
+
+/* I2C1_Transmit --- transmit a byte and wait for completion */
+
+static void I2C1_Transmit(const uint8_t txByte)
+{
+    I2C1TRN = txByte;               // Transmit one byte
+
+    while (I2C1STATbits.TRSTAT)
+        ;
+}
+
+
+/* I2C1_Stop --- send a Stop condition and wait for completion */
+
+static void I2C1_Stop(void)
+{
+    I2C1CONSET = _I2C1CON_PEN_MASK; // Initiate stop condition
+
+    while (I2C1CONbits.PEN != 0)
+        ;
+}
+
+
+/* I2C1_Recover --- recover from a bus collision error by clocking 9 times */
+
+static void I2C1_Recover(void)
+{
+    int i;
+    
+    I2C1CONCLR = _I2C1CON_ON_MASK;  // Disable I2C1
+    
+    TRISAbits.TRISA14 = 1;  // Set SCL1 to input
+    TRISAbits.TRISA15 = 1;  // Set SDA1 to input
+    
+    dally(20);
+    
+    for (i = 0; i < 9; i++)
+    {
+        LATAbits.LATA14 = 0;
+        TRISAbits.TRISA14 = 0;  // Set SCL1 to output, pulling LOW
+        
+        dally(12);
+        
+        LATAbits.LATA14 = 1;    // Allow SCL1 to float HIGH again
+        
+        dally(12);
+    }
+    
+    dally(10);
+    
+    I2C1CONSET = _I2C1CON_ON_MASK;  // Re-enable I2C1
+    
+    dally(10);
+    
+    I2C1_Stop();
+}
+
+
 /* I2C1_DevicePoll --- poll the I2C bus for a device at a given address */
 
 static bool I2C1_DevicePoll(const uint8_t addr)
 {
     bool found;
 
-    I2C1CONSET = _I2C1CON_SEN_MASK; // Initiate start condition
+//    UART4TxByte('[');
+//    UART4TxByte('S');
+    
+    I2C1_Start();
+    
+//    UART4TxByte('T');
 
-    while (I2C1CONbits.SEN != 0)
-        ;
-
-    I2C1TRN = addr | 0x01; // Use I2C read address, D0 = 1
-
-    while (I2C1STATbits.TRSTAT)
-        ;
+    I2C1_Transmit(addr | 0x01); // Use I2C read address, D0 = 1
 
     if (I2C1STATbits.ACKSTAT)   // ACKSTAT == 1 => NACK
     {
@@ -526,11 +604,19 @@ static bool I2C1_DevicePoll(const uint8_t addr)
         found = true;
     }
 
-    I2C1CONSET = _I2C1CON_PEN_MASK; // Initiate stop condition
+//    UART4TxByte('P');
+    
+    I2C1_Stop();
 
-    while (I2C1CONbits.PEN != 0)
-        ;
+    if (I2C1STATbits.BCL)   // Check for bus collision, which seems to happen
+    {                       // at this point with the IMU, for unknown reasons
+//        UART4TxByte('C');
+        I2C1_Recover();
+        return (found);
+    }
 
+//    UART4TxByte(']');
+    
     return (found);
 }
 
@@ -541,15 +627,9 @@ static uint8_t I2C1_ReadIMU(void)
 {
     uint8_t regID;
 
-    I2C1CONSET = _I2C1CON_SEN_MASK; // Initiate start condition
+    I2C1_Start();
 
-    while (I2C1CONbits.SEN != 0)
-        ;
-
-    I2C1TRN = 0xd0;
-
-    while (I2C1STATbits.TRSTAT)
-        ;
+    I2C1_Transmit(0xd0);
 
     if (I2C1STATbits.ACKSTAT)   // ACKSTAT == 1 => NACK
     {
@@ -560,10 +640,7 @@ static uint8_t I2C1_ReadIMU(void)
         LED5 = 1;
     }
 
-    I2C1TRN = 117;  // MPU9250 WHOAMI register
-
-    while (I2C1STATbits.TRSTAT)
-        ;
+    I2C1_Transmit(117);  // MPU9250 WHOAMI register
 
     if (I2C1STATbits.ACKSTAT)   // ACKSTAT == 1 => NACK
     {
@@ -574,15 +651,9 @@ static uint8_t I2C1_ReadIMU(void)
         LED5 = 1;
     }
 
-    I2C1CONSET = _I2C1CON_RSEN_MASK; // Initiate repeated start condition
+    I2C1_RepeatStart();
 
-    while (I2C1CONbits.RSEN != 0)
-        ;
-
-    I2C1TRN = 0xd1;
-
-    while (I2C1STATbits.TRSTAT)
-        ;
+    I2C1_Transmit(0xd1);
 
     if (I2C1STATbits.ACKSTAT)   // ACKSTAT == 1 => NACK
     {
@@ -607,10 +678,7 @@ static uint8_t I2C1_ReadIMU(void)
     while (I2C1CONbits.ACKEN != 0)
         ;
 
-    I2C1CONSET = _I2C1CON_PEN_MASK; // Initiate stop condition
-
-    while (I2C1CONbits.PEN != 0)
-        ;
+    I2C1_Stop();
     
     return (regID);
 }
