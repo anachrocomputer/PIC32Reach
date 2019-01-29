@@ -623,64 +623,72 @@ static bool I2C1_DevicePoll(const uint8_t addr)
 
 /* I2C1_ReadIMU --- read ID register in MPU9250 IMU via I2C */
 
-static uint8_t I2C1_ReadIMU(void)
+static uint8_t I2C1_ReadIMU(const uint8_t i2cAddr, const uint8_t regAddr, const int nBytes, uint8_t buf[])
 {
-    uint8_t regID;
+    int i;
 
     I2C1_Start();
 
-    I2C1_Transmit(0xd0);    // IMU write address
+    I2C1_Transmit(i2cAddr & 0xfe);    // IMU write address
 
     if (I2C1STATbits.ACKSTAT)   // ACKSTAT == 1 => NACK
     {
-        LED5 = 0;   // Light LED5 on NACK
-    }
-    else
-    {
-        LED5 = 1;
+        I2C1_Stop();
+        return (0);
     }
 
-    I2C1_Transmit(117);  // MPU9250 WHOAMI register
+    I2C1_Transmit(regAddr);  // MPU9250 register address
 
     if (I2C1STATbits.ACKSTAT)   // ACKSTAT == 1 => NACK
     {
-        LED5 = 0;   // Light LED5 on NACK
-    }
-    else
-    {
-        LED5 = 1;
+        I2C1_Stop();
+        return (0);
     }
 
     I2C1_RepeatStart();
 
-    I2C1_Transmit(0xd1);    // IMU read address
+    I2C1_Transmit(i2cAddr | 0x01);    // IMU read address
 
     if (I2C1STATbits.ACKSTAT)   // ACKSTAT == 1 => NACK
     {
-        LED5 = 0;   // Light LED5 on NACK
+        I2C1_Stop();
+        return (0);
     }
-    else
+
+    for (i = 0; i < nBytes; i++)
     {
-        LED5 = 1;
+        I2C1CONSET = _I2C1CON_RCEN_MASK; // Initiate receive mode
+
+        while (I2C1STATbits.RBF == 0)
+            ;
+
+        buf[i] = I2C1RCV;
+
+        if (i < (nBytes - 1))
+        {
+            I2C1CONbits.ACKDT = 0;  // Send ACK
+        }
+        else
+        {
+            I2C1CONbits.ACKDT = 1;  // Send NACK because this is the last byte to read
+        }
+
+        I2C1CONSET = _I2C1CON_ACKEN_MASK; // Send master ACK bit
+
+        while (I2C1CONbits.ACKEN != 0)
+            ;
     }
-
-    I2C1CONSET = _I2C1CON_RCEN_MASK; // Initiate receive mode
-
-    while (I2C1STATbits.RBF == 0)
-        ;
-
-    regID = I2C1RCV;
-
-    I2C1CONbits.ACKDT = 0;
-
-    I2C1CONSET = _I2C1CON_ACKEN_MASK; // Send master ACK bit
-
-    while (I2C1CONbits.ACKEN != 0)
-        ;
 
     I2C1_Stop();
     
-    return (regID);
+    if (I2C1STATbits.BCL)   // Check for bus collision, which seems to happen
+    {                       // at this point with the IMU, for unknown reasons
+//        UART4TxByte('C');
+        I2C1_Recover();
+        return (nBytes);
+    }
+    
+    return (nBytes);
 }
 
 
@@ -878,6 +886,7 @@ void main(void)
     static uint8_t spi[32] = {1, 2, 3, 4, 5, 6, 7, 8};
     static uint8_t hello[] = "Hello, world\r\n";
     uint8_t eebuf[256];
+    uint8_t imubuf[32];
     char buf[32];
     int i;
     uint16_t ana;
@@ -1109,7 +1118,17 @@ void main(void)
         LED4 = 1;
         LED5 = 0;
         
-        I2C1_EERead(0xA2, 0, 16, eebuf);
+        //I2C1_EERead(0xA2, 0, 16, eebuf);
+        UART4TxByte('[');
+        if ((I2C1_ReadIMU(0xD0, 117, 1, imubuf) == 1) && (imubuf[0] == 0x71))
+        {
+            UART4TxByte('I');
+        }
+        else
+        {
+            UART4TxByte('?');
+        }
+        UART4TxByte(']');
         
         SPIword = 0xFF00;
         OC1RS = 1023;
