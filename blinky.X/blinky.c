@@ -275,6 +275,14 @@ static void UART2_begin(const int baud)
     U2MODESET = _U2MODE_ON_MASK;      // Enable USART2
 }
 
+static void t1ou2(const char ch)
+{
+    while (U2STAbits.UTXBF) // Wait while Tx buffer full
+        ;
+
+    U2TXREG = ch;
+}
+
 static void UART3_begin(const int baud)
 {
     U3MODEbits.UEN = 3;     // Use just Rx/Tx; no handshaking
@@ -358,6 +366,17 @@ static void UART5_begin(const int baud)
     U5BRG = (40000000 / (baud * 16)) - 1;
     
     U5MODESET = _U5MODE_ON_MASK;      // Enable USART5
+}
+
+void _mon_putc(const char ch)
+{
+    // See: https://microchipdeveloper.com/faq:81
+    if (ch == '\n')
+    {
+        UART4TxByte('\r');
+    }
+    
+    UART4TxByte(ch); // Connect stdout to UART4
 }
 
 static void ADC_begin(void)
@@ -982,12 +1001,11 @@ void main(void)
     
     __asm__("EI");              // Global interrupt enable
     
-    UART4TxByte('\r');
-    UART4TxByte('\n');
+    puts("\nPIC32blinky");
     
     delayms(20);
     
-    while(1)
+    while (1)
     {
         U1TXREG = 'A';
         
@@ -1044,10 +1062,7 @@ void main(void)
         
         for (i = 0; buf[i] != '\0'; i++)
         {
-            while (U2STAbits.UTXBF) // Wait while Tx buffer full
-                ;
-            
-            U2TXREG = buf[i];
+            t1ou2(buf[i]);
         }
         
         LED1 = 1;
@@ -1088,14 +1103,7 @@ void main(void)
         
         delayms(500);
         
-        UART4TxByte('D');
-        UART4TxByte('E');
-        UART4TxByte('A');
-        UART4TxByte('D');
-        UART4TxByte('B');
-        UART4TxByte('E');
-        UART4TxByte('E');
-        UART4TxByte('F');
+        printf("%X", 0xDEADBEEF);
         
         LED1 = 1;
         LED2 = 1;
@@ -1120,16 +1128,14 @@ void main(void)
         LED5 = 0;
         
         //I2C1_EERead(0xA2, 0, 16, eebuf);
-        UART4TxByte('[');
         if ((I2C1_ReadIMU(0xD0, 117, 1, imubuf) == 1) && (imubuf[0] == 0x71))
         {
-            UART4TxByte('I');
+            fputs("[I]", stdout);
         }
         else
         {
-            UART4TxByte('?');
+            fputs("[?]", stdout);
         }
-        UART4TxByte(']');
         
         SPIword = 0xFF00;
         OC1RS = 1023;
