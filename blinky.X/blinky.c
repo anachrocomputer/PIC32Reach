@@ -1005,6 +1005,30 @@ void main(void)
     
     delayms(20);
     
+    printf("DEVCFG0 = %08x\n", DEVCFG0);
+    printf("DEVCFG1 = %08x\n", DEVCFG1);
+    printf("DEVCFG2 = %08x\n", DEVCFG2);
+    printf("DEVCFG3 = %08x\n", DEVCFG3);
+    
+    printf("DEVCFG3.USERID = %x\n", DEVCFG3bits.USERID);
+    
+    printf("DEVID = %x, VER = %x\n", DEVIDbits.DEVID, DEVIDbits.VER);
+    switch (DEVIDbits.DEVID)
+    {
+    case 0x06A13053:
+        puts("PIC32MX250F256L");
+        break;
+    case 0x06A33053:
+        puts("PIC32MX270F512L");
+        break;
+    case 0x06A15053:
+        puts("PIC32MX550F256L");
+        break;
+    case 0x06A35053:
+        puts("PIC32MX570F512L");
+        break;
+    }
+    
     while (1)
     {
         U1TXREG = 'A';
