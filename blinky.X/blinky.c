@@ -905,6 +905,86 @@ static void TRIS_begin(void)
 }
 
 
+/* initTone --- set up a timer to generate a square-wave tone */
+
+static void initTone(void)
+{
+    // Configure Timer 2 for tone generation via PWM
+    T2CONbits.TCKPS = 6;        // Timer 2 prescale: 64
+    
+    TMR2 = 0x00;                // Clear Timer 2 counter
+    PR2 = 1420;                 // Divisor for 440Hz
+    
+    T2CONbits.ON = 1;           // Enable Timer 2
+    
+    OC2CONbits.OCTSEL = 0;      // Source: Timer 2
+    OC2CONbits.OCM = 6;         // PWM mode
+    
+    OC2RS = 0;                  // Silent
+    
+    OC2CONbits.ON = 1;          // Enable OC2 PWM
+}
+
+
+/* initPWM --- set up a timer for PWM generation */
+
+static void initPWM(void)
+{
+    // Configure Timer 3 for 10-bit PWM
+    T3CONbits.TCKPS = 6;        // Timer 3 prescale: 64
+    
+    TMR3 = 0x00;                // Clear Timer 3 counter
+    PR3 = 1023;                 // PWM range 0..1023 (10 bits)
+    
+    T3CONbits.ON = 1;           // Enable Timer 3
+    
+    OC1CONbits.OCTSEL = 1;      // Source: Timer 3
+    OC1CONbits.OCM = 6;         // PWM mode
+    
+    OC1RS = 256;
+    
+    OC1CONbits.ON = 1;          // Enable OC1 PWM
+}
+
+
+/* initMillisecondTimer --- set up a timer to interrupt every millisecond */
+
+static void initMillisecondTimer(void)
+{
+    // Set up Timer1 for regular 1ms interrupt
+    T1CONbits.TCKPS = 0;        // Timer 1 prescale: 1
+    
+    TMR1 = 0x00;                // Clear Timer 1 counter
+    PR1 = 39999;                // Interrupt every 40000 ticks (1ms)
+    
+    IPC1bits.T1IP = 2;          // Timer 1 interrupt priority 2
+    IPC1bits.T1IS = 1;          // Timer 1 interrupt sub-priority 1
+    IFS0CLR = _IFS0_T1IF_MASK;  // Clear Timer 1 interrupt flag
+    IEC0SET = _IEC0_T1IE_MASK;  // Enable Timer 1 interrupt
+    
+    T1CONbits.ON = 1;           // Enable Timer 1
+}
+
+
+/* initSampleTimer --- set up a timer to interrupt at 44100Hz */
+
+static void initSampleTimer(void)
+{
+    // Set up Timer4 for regular 44.1kHz interrupt
+    T4CONbits.TCKPS = 0;        // Timer 4 prescale: 1
+    
+    TMR4 = 0x00;                // Clear Timer 4 counter
+    PR4 = 906;                  // Interrupt every 907 ticks (44100Hz)
+    
+    IPC4bits.T4IP = 4;          // Timer 4 interrupt priority 4
+    IPC4bits.T4IS = 1;          // Timer 4 interrupt sub-priority 1
+    IFS0CLR = _IFS0_T4IF_MASK;  // Clear Timer 4 interrupt flag
+    IEC0SET = _IEC0_T4IE_MASK;  // Enable Timer 4 interrupt
+    
+    T4CONbits.ON = 1;           // Enable Timer 4
+}
+
+
 void main(void)
 {
     static uint8_t spi[32] = {1, 2, 3, 4, 5, 6, 7, 8};
@@ -944,70 +1024,17 @@ void main(void)
     SPI2_begin(2000000);
     SPI3_begin(1000000);
     
-    /* Configure Timer 2 for tone generation via PWM */
-    T2CONbits.TCKPS = 6;        // Timer 2 prescale: 64
-    
-    TMR2 = 0x00;                // Clear Timer 2 counter
-    PR2 = 1420;                 // Divisor for 440Hz
-    
-    T2CONbits.ON = 1;           // Enable Timer 2
-    
-    OC2CONbits.OCTSEL = 0;      // Source: Timer 2
-    OC2CONbits.OCM = 6;         // PWM mode
-    
-    OC2RS = 0;                  // Silent
-    
-    OC2CONbits.ON = 1;          // Enable OC2 PWM
-    
-    /* Configure Timer 3 for 10-bit PWM */
-    T3CONbits.TCKPS = 6;        // Timer 3 prescale: 64
-    
-    TMR3 = 0x00;                // Clear Timer 3 counter
-    PR3 = 1023;                 // PWM range 0..1023 (10 bits)
-    
-    T3CONbits.ON = 1;           // Enable Timer 3
-    
-    OC1CONbits.OCTSEL = 1;      // Source: Timer 3
-    OC1CONbits.OCM = 6;         // PWM mode
-    
-    OC1RS = 256;
-    
-    OC1CONbits.ON = 1;          // Enable OC1 PWM
-            
-    /* Configure Timer 1 */
-    T1CONbits.TCKPS = 0;        // Timer 1 prescale: 1
-    
-    TMR1 = 0x00;                // Clear Timer 1 counter
-    PR1 = 39999;                // Interrupt every 40000 ticks (1ms)
-    
-    T1CONbits.ON = 1;           // Enable Timer 1
-    
-    /* Configure Timer 4 */
-    T4CONbits.TCKPS = 0;        // Timer 4 prescale: 1
-    
-    TMR4 = 0x00;                // Clear Timer 4 counter
-    PR4 = 906;                  // Interrupt every 907 ticks (44100Hz)
-    
-    T4CONbits.ON = 1;           // Enable Timer 4
+    initTone();
+    initPWM();
+    initMillisecondTimer();
+    initSampleTimer();
     
     /* Configure interrupts */
     INTCONSET = _INTCON_MVEC_MASK; // Multi-vector mode
     
-    IPC1bits.T1IP = 2;          // Timer 1 interrupt priority 2
-    IPC1bits.T1IS = 1;          // Timer 1 interrupt sub-priority 1
-    IFS0CLR = _IFS0_T1IF_MASK;  // Clear Timer 1 interrupt flag
-    IEC0SET = _IEC0_T1IE_MASK;  // Enable Timer 1 interrupt
-    
-    IPC4bits.T4IP = 4;          // Timer 4 interrupt priority 4
-    IPC4bits.T4IS = 1;          // Timer 4 interrupt sub-priority 1
-    IFS0CLR = _IFS0_T4IF_MASK;  // Clear Timer 4 interrupt flag
-    IEC0SET = _IEC0_T4IE_MASK;  // Enable Timer 4 interrupt
-    
-    __asm__("EI");              // Global interrupt enable
+    __builtin_enable_interrupts();  // Global interrupt enable
     
     puts("\nPIC32blinky");
-    
-    delayms(20);
     
     printf("DEVCFG0 = %08x\n", DEVCFG0);
     printf("DEVCFG1 = %08x\n", DEVCFG1);
