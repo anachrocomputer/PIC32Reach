@@ -132,7 +132,7 @@ static uint32_t millis(void)
 }
 
 
-void __ISR(_TIMER_4_VECTOR, ipl4AUTO) Timer4Handler(void) 
+void __ISR(_TIMER_4_VECTOR, ipl7AUTO) Timer4Handler(void)
 {    
     static int flag = 0;
     
@@ -159,7 +159,7 @@ void __ISR(_TIMER_4_VECTOR, ipl4AUTO) Timer4Handler(void)
     IFS0CLR = _IFS0_T4IF_MASK;  // Clear Timer 4 interrupt flag
 }
 
-void __ISR(_TIMER_1_VECTOR, ipl2AUTO) Timer1Handler(void) 
+void __ISR(_TIMER_1_VECTOR, ipl6AUTO) Timer1Handler(void)
 {
     MilliSeconds++;
     
@@ -313,7 +313,7 @@ static void UART4_begin(const int baud)
     
     U4BRG = (40000000 / (baud * 16)) - 1;
     
-    IPC9bits.U4IP = 1;          // UART4 interrupt priority 1
+    IPC9bits.U4IP = 1;          // UART4 interrupt priority 1 (lowest)
     IPC9bits.U4IS = 2;          // UART4 interrupt sub-priority 2
     
     IFS2CLR = _IFS2_U4TXIF_MASK;  // Clear UART4 Tx interrupt flag
@@ -957,7 +957,7 @@ static void initMillisecondTimer(void)
     TMR1 = 0x00;                // Clear Timer 1 counter
     PR1 = 39999;                // Interrupt every 40000 ticks (1ms)
     
-    IPC1bits.T1IP = 2;          // Timer 1 interrupt priority 2
+    IPC1bits.T1IP = 6;          // Timer 1 interrupt priority 6
     IPC1bits.T1IS = 1;          // Timer 1 interrupt sub-priority 1
     IFS0CLR = _IFS0_T1IF_MASK;  // Clear Timer 1 interrupt flag
     IEC0SET = _IEC0_T1IE_MASK;  // Enable Timer 1 interrupt
@@ -976,7 +976,7 @@ static void initSampleTimer(void)
     TMR4 = 0x00;                // Clear Timer 4 counter
     PR4 = 906;                  // Interrupt every 907 ticks (44100Hz)
     
-    IPC4bits.T4IP = 4;          // Timer 4 interrupt priority 4
+    IPC4bits.T4IP = 7;          // Timer 4 interrupt priority 7 (highest)
     IPC4bits.T4IS = 1;          // Timer 4 interrupt sub-priority 1
     IFS0CLR = _IFS0_T4IF_MASK;  // Clear Timer 4 interrupt flag
     IEC0SET = _IEC0_T4IE_MASK;  // Enable Timer 4 interrupt
