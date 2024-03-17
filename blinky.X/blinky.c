@@ -20,7 +20,7 @@
 #pragma config FPLLIDIV = DIV_2         // PLL Input Divider (2x Divider)
 #pragma config FPLLMUL = MUL_20         // PLL Multiplier (20x Multiplier)
 #pragma config UPLLIDIV = DIV_4         // USB PLL Input Divider (4x Divider)
-#pragma config UPLLEN = ON              // USB PLL Enable (Enabled)
+#pragma config UPLLEN = OFF             // USB PLL Enable (Disabled)
 #pragma config FPLLODIV = DIV_4         // System PLL Output Clock Divider (PLL Divide by 4)
 
 // DEVCFG1
@@ -52,6 +52,8 @@
 #include <math.h>
 #include <stdlib.h>
 #include <stdbool.h>
+
+#define FPBCLK  (40000000)      // PBCLK frequency is 40MHz
 
 #define LED1        LATEbits.LATE6
 #define LED2        LATEbits.LATE7
@@ -144,12 +146,12 @@ void __ISR(_TIMER_4_VECTOR, ipl7AUTO) Timer4Handler(void)
     
     if (flag > 31)
     {
-        PR4 = 907;
+        PR4 = PR4 = (FPBCLK / 44100);
         flag = 0;
     }
     else
     {
-        PR4 = 906;
+        PR4 = PR4 = (FPBCLK / 44100) - 1;
         flag++;
     }
     
@@ -262,7 +264,7 @@ static void UART1_begin(const int baud)
     U1STAbits.UTXEN = 1;    // Enable Tx
     U1STAbits.URXEN = 1;    // Enable Rx (unused at present)
     
-    U1BRG = (40000000 / (baud * 16)) - 1;
+    U1BRG = (FPBCLK / (baud * 16)) - 1;
     
     U1MODESET = _U1MODE_ON_MASK;      // Enable USART1
 }
@@ -274,7 +276,7 @@ static void UART2_begin(const int baud)
     U2STAbits.UTXEN = 1;    // Enable Tx
     U2STAbits.URXEN = 1;    // Enable Rx (unused at present)
     
-    U2BRG = (40000000 / (baud * 16)) - 1;
+    U2BRG = (FPBCLK / (baud * 16)) - 1;
     
     U2MODESET = _U2MODE_ON_MASK;      // Enable USART2
 }
@@ -294,7 +296,7 @@ static void UART3_begin(const int baud)
     U3STAbits.UTXEN = 1;    // Enable Tx
     U3STAbits.URXEN = 1;    // Enable Rx (unused at present)
     
-    U3BRG = (40000000 / (baud * 16)) - 1;
+    U3BRG = (FPBCLK / (baud * 16)) - 1;
     
     U3MODESET = _U3MODE_ON_MASK;      // Enable USART3
 }
@@ -311,7 +313,7 @@ static void UART4_begin(const int baud)
     U4STAbits.UTXEN = 1;    // Enable Tx
     U4STAbits.URXEN = 1;    // Enable Rx
     
-    U4BRG = (40000000 / (baud * 16)) - 1;
+    U4BRG = (FPBCLK / (baud * 16)) - 1;
     
     IPC9bits.U4IP = 1;          // UART4 interrupt priority 1 (lowest)
     IPC9bits.U4IS = 2;          // UART4 interrupt sub-priority 2
@@ -367,7 +369,7 @@ static void UART5_begin(const int baud)
     U5STAbits.UTXEN = 1;    // Enable Tx
     U5STAbits.URXEN = 1;    // Enable Rx (unused at present)
     
-    U5BRG = (40000000 / (baud * 16)) - 1;
+    U5BRG = (FPBCLK / (baud * 16)) - 1;
     
     U5MODESET = _U5MODE_ON_MASK;      // Enable USART5
 }
@@ -425,7 +427,7 @@ uint16_t analogRead(const int chan)
 
 static void SPI2_begin(const int baud)
 {
-    SPI2BRG = (20000000 / baud) - 1;
+    SPI2BRG = ((FPBCLK / 2) / baud) - 1;
     SPI2CONbits.MSTEN = 1;  // Master mode
     SPI2CONbits.MODE16 = 1; // 16-bit mode
     SPI2CONbits.MODE32 = 0;
@@ -446,7 +448,7 @@ static void SPI2_begin(const int baud)
 
 static void SPI3_begin(const int baud)
 {    
-    SPI3BRG = (20000000 / baud) - 1;
+    SPI3BRG = ((FPBCLK / 2) / baud) - 1;
     SPI3CONbits.MSTEN = 1;  // Master mode
     SPI3CONbits.MODE16 = 0; // 8-bit mode
     SPI3CONbits.MODE32 = 0;
@@ -511,6 +513,7 @@ int SPIbytesPending(void)
 
 static void I2C1_begin(const int speed)
 {
+    // TODO: base these numbers on FPBCLK
     if (speed > 200)
     {
         I2C1BRG = 0x2c;     // 400kHz
@@ -790,7 +793,7 @@ void toneT2(const int freq)
     }
     else
     {
-        const int div = (40000000 / 64) / freq;
+        const int div = (FPBCLK / 64) / freq;
         TMR2 = 0x00;                // Clear Timer 2 counter
         PR2 = div;
         OC2RS = div / 2;
@@ -913,7 +916,7 @@ static void initTone(void)
     T2CONbits.TCKPS = 6;        // Timer 2 prescale: 64
     
     TMR2 = 0x00;                // Clear Timer 2 counter
-    PR2 = 1420;                 // Divisor for 440Hz
+    PR2 = ((FPBCLK / 64) / 440) - 1; // Divisor for 440Hz
     
     T2CONbits.ON = 1;           // Enable Timer 2
     
@@ -951,18 +954,18 @@ static void initPWM(void)
 
 static void initMillisecondTimer(void)
 {
-    // Set up Timer1 for regular 1ms interrupt
+    /* Configure Timer 1 for 1kHz/1ms interrupts */
     T1CONbits.TCKPS = 0;        // Timer 1 prescale: 1
     
     TMR1 = 0x00;                // Clear Timer 1 counter
-    PR1 = 39999;                // Interrupt every 40000 ticks (1ms)
+    PR1 = (FPBCLK / 1000) - 1;  // Interrupt every millisecond (1kHz)
     
     IPC1bits.T1IP = 6;          // Timer 1 interrupt priority 6
     IPC1bits.T1IS = 1;          // Timer 1 interrupt sub-priority 1
     IFS0CLR = _IFS0_T1IF_MASK;  // Clear Timer 1 interrupt flag
     IEC0SET = _IEC0_T1IE_MASK;  // Enable Timer 1 interrupt
     
-    T1CONbits.ON = 1;           // Enable Timer 1
+    T1CONSET = _T1CON_ON_MASK;  // Enable Timer 1
 }
 
 
@@ -974,7 +977,7 @@ static void initSampleTimer(void)
     T4CONbits.TCKPS = 0;        // Timer 4 prescale: 1
     
     TMR4 = 0x00;                // Clear Timer 4 counter
-    PR4 = 906;                  // Interrupt every 907 ticks (44100Hz)
+    PR4 = (FPBCLK / 44100) - 1; // Interrupt at 44100Hz
     
     IPC4bits.T4IP = 7;          // Timer 4 interrupt priority 7 (highest)
     IPC4bits.T4IS = 1;          // Timer 4 interrupt sub-priority 1
