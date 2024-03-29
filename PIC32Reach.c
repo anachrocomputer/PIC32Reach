@@ -1,4 +1,4 @@
-/* blinky --- blink five LEDs on PIC32 dev board            2019-01-10 */
+/* PIC32Reach --- blink LEDs on Reach Robotics PIC32 board  2019-01-10 */
 /* Copyright (c) 2019 John Honniball. All rights reserved              */
 
 /*

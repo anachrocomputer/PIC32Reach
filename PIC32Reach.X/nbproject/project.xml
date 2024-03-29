@@ -3,7 +3,7 @@
     <type>com.microchip.mplab.nbide.embedded.makeproject</type>
     <configuration>
         <data xmlns="http://www.netbeans.org/ns/make-project/1">
-            <name>blinky</name>
+            <name>PIC32Reach</name>
             <creation-uuid>b75053bd-5b4f-4e52-9033-5e1d0e435341</creation-uuid>
             <make-project-type>0</make-project-type>
             <c-extensions>c</c-extensions>
